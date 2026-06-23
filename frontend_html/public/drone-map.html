@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ANAC UTM - Multi-Drones avec Logs</title>
+    
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { background: #0b0e17; font-family: system-ui, sans-serif; }
+        
+        .topbar {
+            background: #111621;
+            border-bottom: 1px solid rgba(255,255,255,0.07);
+            padding: 12px 20px;
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 1000;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .logo {
+            font-size: 18px;
+            font-weight: bold;
+            background: linear-gradient(90deg, #4f8ef7, #00d4aa);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        
+        .drone-selector {
+            display: flex;
+            gap: 10px;
+            background: #1a2235;
+            padding: 5px 10px;
+            border-radius: 8px;
+        }
+        
+        .drone-btn {
+            background: #111621;
+            border: 1px solid #2a3344;
+            color: #e2e8f0;
+            padding: 5px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: all 0.2s;
+        }
+        
+        .drone-btn.active {
+            background: #4f8ef7;
+            border-color: #4f8ef7;
+            color: white;
+        }
+        
+        .drone-btn.critical {
+            border-color: #f04040;
+            color: #f04040;
+            animation: pulseBtn 1s infinite;
+        }
+        
+        @keyframes pulseBtn { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+        
+        .status-badge {
+            background: #1a2235;
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+        }
+        
+        .status-badge .dot {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #22c55e;
+            margin-right: 6px;
+            animation: pulse 1.5s infinite;
+        }
+        
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+        
+        #map {
+            position: absolute;
+            top: 60px;
+            bottom: 0;
+            left: 0;
+            right: 320px;
+        }
+        
+        /* Panneau latéral droit pour les logs */
+        .logs-panel {
+            position: absolute;
+            top: 60px;
+            right: 0;
+            bottom: 0;
+            width: 320px;
+            background: #111621;
+            border-left: 1px solid rgba(255,255,255,0.07);
+            display: flex;
+            flex-direction: column;
+            z-index: 900;
+        }
+        
+        .logs-header {
+            padding: 15px;
+            border-bottom: 1px solid rgba(255,255,255,0.07);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .logs-header h4 {
+            color: #4f8ef7;
+            font-size: 13px;
+        }
+        
+        .clear-logs {
+            background: #2a3344;
+            border: none;
+            color: #e2e8f0;
+            padding: 4px 8px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 10px;
+        }
+        
+        .logs-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 10px;
+        }
+        
+        .log-entry {
+            font-family: monospace;
+            font-size: 11px;
+            padding: 8px 10px;
+            margin-bottom: 6px;
+            border-radius: 6px;
+            border-left: 3px solid;
+        }
+        
+        .log-entry.info { border-color: #4f8ef7; background: rgba(79,142,247,0.05); }
+        .log-entry.warning { border-color: #f5a623; background: rgba(245,166,35,0.05); }
+        .log-entry.critical { border-color: #f04040; background: rgba(240,64,64,0.05); animation: blinkLog 1s infinite; }
+        
+        @keyframes blinkLog { 0%, 100% { opacity: 1; } 50% { opacity: 0.7; } }
+        
+        .log-time { color: #64748b; font-size: 9px; margin-bottom: 4px; }
+        .log-message { color: #e2e8f0; }
+        .log-drone { color: #00d4aa; font-weight: bold; }
+        
+        .info-panel {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            background: rgba(17,22,33,0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 12px;
+            padding: 12px 16px;
+            border: 1px solid rgba(255,255,255,0.1);
+            z-index: 1000;
+            font-size: 12px;
+            min-width: 240px;
+            pointer-events: none;
+        }
+        
+        .info-panel h4 { margin-bottom: 8px; color: #4f8ef7; font-size: 12px; }
+        .info-panel .row { display: flex; justify-content: space-between; margin-bottom: 4px; }
+        .info-panel .label { color: #64748b; }
+        .info-panel .value { font-weight: 600; color: #00d4aa; font-family: monospace; }
+        
+        .alert-strip {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 320px;
+            background: rgba(240,64,64,0.95);
+            padding: 8px 16px;
+            display: none;
+            align-items: center;
+            gap: 10px;
+            font-size: 12px;
+            color: white;
+            font-family: monospace;
+            z-index: 1000;
+            animation: blinkAlert 1s infinite;
+        }
+        
+        @keyframes blinkAlert { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
+        
+        .error-msg {
+            position: absolute;
+            top: 80px;
+            right: 340px;
+            background: rgba(240,64,64,0.95);
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 11px;
+            z-index: 1000;
+            display: none;
+        }
+        
+        .btn-recenter {
+            position: absolute;
+            bottom: 20px;
+            right: 340px;
+            background: #1a2235;
+            border: 1px solid #4f8ef7;
+            color: #4f8ef7;
+            padding: 6px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 11px;
+            z-index: 1000;
+        }
+        
+        .btn-recenter:hover { background: #4f8ef7; color: white; }
+    </style>
+</head>
+<body>
+    <div class="topbar">
+        <div class="logo">🛸 ANAC UTM — Multi-Drones avec Logs</div>
+        <div class="drone-selector" id="droneSelector">
+            <button class="drone-btn active" data-drone="TN-DRN-001">🟢 TN-DRN-001</button>
+            <button class="drone-btn" data-drone="TN-DRN-002">🔴 TN-DRN-002</button>
+            <button class="drone-btn" data-drone="TN-DRN-003">🟢 TN-DRN-003</button>
+        </div>
+        <div class="status-badge"><span class="dot"></span> MQTT → Supabase</div>
+    </div>
+    
+    <div id="map"></div>
+    
+    <div class="logs-panel">
+        <div class="logs-header">
+            <h4>Historique des événements</h4>
+            <button class="clear-logs" id="clearLogs">Effacer</button>
+        </div>
+        <div class="logs-list" id="logsList">
+            <div style="text-align: center; color: #64748b; padding: 20px;">Chargement des logs...</div>
+        </div>
+    </div>
+    
+    <div class="info-panel" id="infoPanel">
+        <h4>🛸 Télémétrie</h4>
+        <div class="row"><span class="label">Drone ID</span><span class="value" id="drone-id">—</span></div>
+        <div class="row"><span class="label">Latitude</span><span class="value" id="drone-lat">—</span></div>
+        <div class="row"><span class="label">Longitude</span><span class="value" id="drone-lng">—</span></div>
+        <div class="row"><span class="label">Altitude</span><span class="value" id="drone-alt">— m</span></div>
+        <div class="row"><span class="label">Vitesse</span><span class="value" id="drone-speed">— km/h</span></div>
+        <div class="row"><span class="label">Batterie</span><span class="value" id="drone-battery">— %</span></div>
+        <div class="row"><span class="label">Statut</span><span class="value" id="drone-status">—</span></div>
+        <div class="row"><span class="label">Dernière MAJ</span><span class="value" id="drone-time">—</span></div>
+    </div>
+    
+    <div class="alert-strip" id="alertStrip">
+        <span>⚠️ ALERTE GEOFENCING ⚠️</span>
+        <span id="alertMsg">Violation de zone restreinte</span>
+    </div>
+    
+    <button class="btn-recenter" id="recenterBtn">Recentrer</button>
+    <div class="error-msg" id="errorMsg"></div>
+
+    <script>
+        // CONFIGURATION
+        const SUPABASE_URL = 'https://ezsmghgfgsdjhtnfyndm.supabase.co';
+        const SUPABASE_KEY = 'sb_publishable_DTO7GMGUIxP9I7B3uf71Pg_F8BKDyNv';
+        
+        // Liste des drones
+        const DRONES = ['TN-DRN-001', 'TN-DRN-002', 'TN-DRN-003'];
+        let currentDrone = 'TN-DRN-001';
+        let droneMarkers = {};
+        let currentPositions = {};
+        
+        // Zones de géofencing
+        const geofenceZones = [
+            { lat: 36.8510, lng: 10.2272, radius: 5000, name: 'Tunis-Carthage CTR', color: '#f04040', danger: true },
+            { lat: 36.8565, lng: 10.2450, radius: 2000, name: 'Zone Présidentielle', color: '#f04040', danger: true },
+            { lat: 37.2430, lng: 9.8010,  radius: 8000, name: 'Base Militaire Bizerte', color: '#f5a623', danger: false }
+        ];
+        
+        // Initialisation de la carte
+        const map = L.map('map').setView([36.8, 10.18], 10);
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+            attribution: '© CartoDB',
+            maxZoom: 19
+        }).addTo(map);
+        L.control.zoom({ position: 'bottomright' }).addTo(map);
+        
+        // Ajouter les zones
+        geofenceZones.forEach((zone) => {
+            const circle = L.circle([zone.lat, zone.lng], {
+                radius: zone.radius,
+                color: zone.color,
+                fillColor: zone.color,
+                fillOpacity: 0.15,
+                weight: 2,
+                dashArray: '5, 5'
+            }).addTo(map);
+            circle.bindTooltip(`🚫 ${zone.name}`);
+        });
+        
+        // Icônes pour les marqueurs
+        function getDroneIcon(droneId, isViolation = false) {
+            const color = isViolation ? '#f04040' : '#4f8ef7';
+            const glow = isViolation ? 'box-shadow:0 0 10px #f04040; animation: pulse 0.5s infinite;' : '';
+            return L.divIcon({
+                className: '',
+                html: `<div style="width:14px;height:14px;border-radius:50%;
+                    background:${color}22;border:2px solid ${color};
+                    display:flex;align-items:center;justify-content:center;
+                    ${glow}">✦</div>
+                    <div style="font-family:monospace;font-size:8px;color:${color};
+                    background:rgba(17,22,33,0.9);padding:2px 4px;border-radius:3px;
+                    margin-top:2px;border:1px solid ${color}44;white-space:nowrap;">
+                    ${droneId.replace('TN-DRN-', '#')}</div>`,
+                iconSize: [50, 32],
+                iconAnchor: [7, 7]
+            });
+        }
+        
+        // Ajouter ou mettre à jour un marqueur
+        function updateDroneMarker(droneId, lat, lng, isViolation) {
+            if (droneMarkers[droneId]) {
+                droneMarkers[droneId].setLatLng([lat, lng]);
+                droneMarkers[droneId].setIcon(getDroneIcon(droneId, isViolation));
+            } else {
+                droneMarkers[droneId] = L.marker([lat, lng], { 
+                    icon: getDroneIcon(droneId, isViolation) 
+                }).addTo(map);
+                droneMarkers[droneId].on('click', () => selectDrone(droneId));
+            }
+            currentPositions[droneId] = [lat, lng];
+        }
+        
+        // Sélectionner un drone
+        function selectDrone(droneId) {
+            currentDrone = droneId;
+            document.querySelectorAll('.drone-btn').forEach(btn => {
+                btn.classList.remove('active');
+                if (btn.dataset.drone === droneId) btn.classList.add('active');
+            });
+            fetchDroneData(droneId);
+            if (currentPositions[droneId]) {
+                map.setView(currentPositions[droneId], 13);
+            }
+        }
+        
+        // Afficher les logs
+        async function fetchLogs() {
+            try {
+                const url = `${SUPABASE_URL}/rest/v1/drone_logs?order=created_at.desc&limit=50`;
+                const response = await fetch(url, {
+                    headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` }
+                });
+                const logs = await response.json();
+                
+                const logsDiv = document.getElementById('logsList');
+                if (logs.length === 0) {
+                    logsDiv.innerHTML = '<div style="text-align: center; color: #64748b; padding: 20px;">Aucun log pour le moment</div>';
+                    return;
+                }
+                
+                logsDiv.innerHTML = logs.map(log => `
+                    <div class="log-entry ${log.severity}">
+                        <div class="log-time">${new Date(log.created_at).toLocaleTimeString('fr-FR')}</div>
+                        <div class="log-message">
+                            <span class="log-drone">[${log.drone_id}]</span>
+                            ${log.message}
+                        </div>
+                    </div>
+                `).join('');
+            } catch (err) {
+                console.error('Erreur logs:', err);
+            }
+        }
+        
+        // Récupérer les données d'un drone
+        async function fetchDroneData(droneId) {
+            try {
+                const url = `${SUPABASE_URL}/rest/v1/telemetry?drone_id=eq.${droneId}&order=recorded_at.desc&limit=1`;
+                const response = await fetch(url, {
+                    headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` }
+                });
+                const data = await response.json();
+                
+                if (data && data.length > 0) {
+                    const tele = data[0];
+                    
+                    document.getElementById('drone-id').textContent = tele.drone_id;
+                    document.getElementById('drone-lat').textContent = tele.lat.toFixed(6);
+                    document.getElementById('drone-lng').textContent = tele.lng.toFixed(6);
+                    document.getElementById('drone-alt').textContent = tele.altitude ? tele.altitude + ' m' : '—';
+                    document.getElementById('drone-speed').textContent = tele.speed ? tele.speed + ' km/h' : '—';
+                    document.getElementById('drone-battery').textContent = tele.battery ? tele.battery + ' %' : '—';
+                    
+                    // Déterminer le statut
+                    let status = 'Vol normal';
+                    let isViolation = false;
+                    
+                    for (const zone of geofenceZones) {
+                        const distance = ((tele.lat - zone.lat)**2 + (tele.lng - zone.lng)**2)**0.5 * 111000;
+                        if (distance < zone.radius && zone.danger) {
+                            status = '⚠️ ALERTE ZONE INTERDITE ⚠️';
+                            isViolation = true;
+                            document.getElementById('drone-status').style.color = '#f04040';
+                            
+                            // Afficher bandeau d'alerte
+                            const alertStrip = document.getElementById('alertStrip');
+                            document.getElementById('alertMsg').textContent = `Violation: ${zone.name}`;
+                            alertStrip.style.display = 'flex';
+                            setTimeout(() => { alertStrip.style.display = 'none'; }, 5000);
+                            break;
+                        }
+                    }
+                    
+                    if (!isViolation) {
+                        if (tele.battery < 25) status = '⚠️ Batterie faible';
+                        else if (tele.altitude > 120) status = '⚠️ Altitude excessive';
+                        else status = '✅ Vol normal';
+                        document.getElementById('drone-status').style.color = '#00d4aa';
+                    }
+                    
+                    document.getElementById('drone-status').textContent = status;
+                    
+                    const time = new Date(tele.recorded_at);
+                    document.getElementById('drone-time').textContent = time.toLocaleTimeString('fr-FR');
+                    
+                    // Couleur batterie
+                    const batteryEl = document.getElementById('drone-battery');
+                    if (tele.battery < 25) batteryEl.style.color = '#f04040';
+                    else if (tele.battery < 50) batteryEl.style.color = '#f5a623';
+                    else batteryEl.style.color = '#00d4aa';
+                    
+                    // Mettre à jour tous les marqueurs
+                    updateDroneMarker(tele.drone_id, tele.lat, tele.lng, isViolation);
+                }
+            } catch (err) {
+                console.error('Erreur:', err);
+            }
+        }
+        
+        // Récupérer les données de TOUS les drones
+        async function fetchAllDrones() {
+            for (const droneId of DRONES) {
+                try {
+                    const url = `${SUPABASE_URL}/rest/v1/telemetry?drone_id=eq.${droneId}&order=recorded_at.desc&limit=1`;
+                    const response = await fetch(url, {
+                        headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` }
+                    });
+                    const data = await response.json();
+                    
+                    if (data && data.length > 0) {
+                        const tele = data[0];
+                        let isViolation = false;
+                        for (const zone of geofenceZones) {
+                            const distance = ((tele.lat - zone.lat)**2 + (tele.lng - zone.lng)**2)**0.5 * 111000;
+                            if (distance < zone.radius && zone.danger) isViolation = true;
+                        }
+                        updateDroneMarker(droneId, tele.lat, tele.lng, isViolation);
+                        
+                        // Mettre à jour le bouton du drone 002 s'il est en alerte
+                        if (droneId === 'TN-DRN-002' && isViolation) {
+                            const btn = document.querySelector('.drone-btn[data-drone="TN-DRN-002"]');
+                            btn.classList.add('critical');
+                            btn.innerHTML = '🔴 TN-DRN-002 (ALERTE)';
+                        } else if (droneId === 'TN-DRN-002') {
+                            const btn = document.querySelector('.drone-btn[data-drone="TN-DRN-002"]');
+                            btn.classList.remove('critical');
+                            btn.innerHTML = '🟡 TN-DRN-002';
+                        }
+                    }
+                } catch (err) {
+                    console.error(`Erreur pour ${droneId}:`, err);
+                }
+            }
+        }
+        
+        // Recentrer
+        document.getElementById('recenterBtn').addEventListener('click', () => {
+            if (currentPositions[currentDrone]) {
+                map.setView(currentPositions[currentDrone], 14);
+            }
+        });
+        
+        document.getElementById('clearLogs').addEventListener('click', () => {
+            document.getElementById('logsList').innerHTML = '<div style="text-align: center; color: #64748b; padding: 20px;">Logs effacés</div>';
+        });
+        
+        // Sélecteur de drone
+        document.querySelectorAll('.drone-btn').forEach(btn => {
+            btn.addEventListener('click', () => selectDrone(btn.dataset.drone));
+        });
+        
+        // Démarrer
+        console.log('Application multi-drones démarrée');
+        fetchAllDrones();
+        fetchLogs();
+        setInterval(() => {
+            fetchAllDrones();
+            fetchLogs();
+            fetchDroneData(currentDrone);
+        }, 3000);
+    </script>
+</body>
+</html>
