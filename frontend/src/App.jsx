@@ -6,6 +6,7 @@ import RegisterDrone from './components/RegisterDrone'
 import AdminDrones from './components/AdminDrones'
 import OperatorDrones from './components/OperatorDrones'
 import PoliceScanner from './components/PoliceScanner'
+import GeofenceManager from './components/GeofenceManager'
 import { 
   Satellite, 
   Drone, 
@@ -16,6 +17,7 @@ import {
   PlusCircle,
   List,
   Home,
+  MapPin,
   AlertTriangle,
   CheckCircle,
   Clock
@@ -289,10 +291,16 @@ function App() {
               )}
 
               {profile?.role === 'admin' && (
-                <Link to="/admin/drones" className="px-3 py-1.5 text-sm text-[#64748b] hover:text-white hover:bg-[#1f2937] rounded-lg transition-colors">
-                  <ClipboardCheck className="w-4 h-4 inline mr-1" />
-                  Valider
-                </Link>
+                <>
+                  <Link to="/admin/drones" className="px-3 py-1.5 text-sm text-[#64748b] hover:text-white hover:bg-[#1f2937] rounded-lg transition-colors">
+                    <ClipboardCheck className="w-4 h-4 inline mr-1" />
+                    Valider
+                  </Link>
+                  <Link to="/admin/zones" className="px-3 py-1.5 text-sm text-[#64748b] hover:text-white hover:bg-[#1f2937] rounded-lg transition-colors">
+                    <MapPin className="w-4 h-4 inline mr-1" />
+                    Zones
+                  </Link>
+                </>
               )}
 
               {profile?.role === 'police' && (
@@ -459,8 +467,6 @@ function App() {
                     <button
                       onClick={() => {
                         if (selectedDroneData) {
-                          // On simule un clic sur le drone pour le recentrer via le composant Map
-                          // La carte dans Map.jsx gère le recentrage via selectedDrone
                           setSelectedDrone(selectedDroneData.id)
                         }
                       }}
@@ -474,16 +480,43 @@ function App() {
               </>
             } />
 
-            {/* Routes operatuer */}
-            <Route path="/operator/register" element={<RegisterDrone user={user} />} />
-            <Route path="/operator/drones" element={<OperatorDrones user={user} />} />
+            {/* Routes opérateur */}
+            <Route path="/operator/register" element={
+              <div className="flex-1 flex items-center justify-center p-6 bg-[#0a0e1a] overflow-auto">
+                <RegisterDrone user={user} />
+              </div>
+            } />
+            
+            <Route path="/operator/drones" element={
+              <div className="flex-1 flex items-start justify-center p-6 bg-[#0a0e1a] overflow-auto">
+                <OperatorDrones user={user} />
+              </div>
+            } />
 
             {/* Routes admin */}
-            <Route path="/admin/drones" element={<AdminDrones />} />
+            <Route path="/admin/drones" element={
+              <div className="flex-1 p-6 bg-[#0a0e1a] overflow-auto">
+                <AdminDrones />
+              </div>
+            } />
+
+            <Route path="/admin/zones" element={
+              <div className="flex-1 bg-[#0a0e1a] overflow-hidden">
+                <GeofenceManager />
+              </div>
+            } />
 
             {/* Routes police */}
-            <Route path="/police/scan" element={<PoliceScanner />} />
-            <Route path="/verify" element={<PoliceScanner />} />
+            <Route path="/police/scan" element={
+              <div className="flex-1 bg-[#0a0e1a] overflow-auto">
+                <PoliceScanner />
+              </div>
+            } />
+            <Route path="/verify" element={
+              <div className="flex-1 bg-[#0a0e1a] overflow-auto">
+                <PoliceScanner />
+              </div>
+            } />
 
             {/* Fallback */}
             <Route path="*" element={<Navigate to="/" />} />
