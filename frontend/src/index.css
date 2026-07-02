@@ -2,20 +2,234 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  --bg: #0b0e17;
-  --surface: #111621;
-  --card: #161c2d;
-  --accent: #4f8ef7;
-  --accent2: #00d4aa;
-  --danger: #f04040;
-  --warning: #f5a623;
-  --text: #e2e8f0;
-  --muted: #64748b;
+@layer base {
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+
+  html {
+    scroll-behavior: smooth;
+    scroll-padding-top: 80px;
+  }
+
+  body {
+    overflow-x: hidden;
+    background-color: #0b0e17;
+  }
+
+  ::selection {
+    background-color: rgba(79, 142, 247, 0.3);
+    color: #fff;
+  }
+
+  ::-webkit-scrollbar {
+    width: 8px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: #0b0e17;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: #1e293b;
+    border-radius: 4px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: #4f8ef7;
+  }
 }
 
-body {
-  background: var(--bg);
-  color: var(--text);
-  font-family: 'Inter', system-ui, sans-serif;
+@layer components {
+  .section-padding {
+    @apply px-6 sm:px-8 lg:px-16 xl:px-24;
+  }
+
+  .glass-card {
+    background: rgba(17, 24, 39, 0.6);
+    backdrop-filter: blur(20px);
+    border: 1px solid rgba(79, 142, 247, 0.1);
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .glass-card:hover {
+    border-color: rgba(79, 142, 247, 0.3);
+    box-shadow: 0 0 30px rgba(79, 142, 247, 0.1);
+    transform: translateY(-2px);
+  }
+
+  .gradient-text {
+    background: linear-gradient(135deg, #4f8ef7, #00d4aa);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .gradient-border {
+    position: relative;
+  }
+
+  .gradient-border::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 1px;
+    background: linear-gradient(135deg, #4f8ef7, #00d4aa);
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+  }
+
+  .btn-primary {
+    @apply relative px-8 py-3.5 bg-utm-blue text-white font-display font-medium rounded-lg overflow-hidden transition-all duration-300;
+  }
+
+  .btn-primary::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg, #4f8ef7, #00d4aa);
+    opacity: 0;
+    transition: opacity 0.3s;
+  }
+
+  .btn-primary:hover::before {
+    opacity: 1;
+  }
+
+  .btn-primary span {
+    position: relative;
+    z-index: 1;
+  }
+
+  .btn-secondary {
+    @apply px-8 py-3.5 border border-utm-border text-utm-text font-display font-medium rounded-lg transition-all duration-300 hover:border-utm-blue hover:text-utm-blue hover:shadow-lg hover:shadow-utm-blue/10;
+  }
+
+  .stat-card {
+    @apply glass-card rounded-xl p-6 text-center;
+  }
+
+  .noise-overlay {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 9999;
+    opacity: 0.03;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  .animate-delay-100 {
+    animation-delay: 0.1s;
+  }
+
+  .animate-delay-200 {
+    animation-delay: 0.2s;
+  }
+
+  .animate-delay-300 {
+    animation-delay: 0.3s;
+  }
+
+  .animate-delay-400 {
+    animation-delay: 0.4s;
+  }
+
+  .animate-delay-500 {
+    animation-delay: 0.5s;
+  }
+
+  .animate-delay-600 {
+    animation-delay: 0.6s;
+  }
+}
+
+/* Leaflet map dark theme */
+.leaflet-container {
+  background: #0b0e17 !important;
+  font-family: 'DM Sans', sans-serif;
+}
+
+.leaflet-tile-pane {
+  filter: none;
+}
+
+.leaflet-control-zoom a {
+  background: #111827 !important;
+  color: #4f8ef7 !important;
+  border-color: #1e293b !important;
+}
+
+.leaflet-control-attribution {
+  background: rgba(11, 14, 23, 0.8) !important;
+  color: #94a3b8 !important;
+}
+
+.leaflet-control-attribution a {
+  color: #4f8ef7 !important;
+}
+
+/* Drone marker animation */
+.drone-marker {
+  animation: float 3s ease-in-out infinite;
+}
+
+/* Grid background */
+.grid-bg {
+  background-image: 
+    linear-gradient(rgba(79, 142, 247, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(79, 142, 247, 0.03) 1px, transparent 1px);
+  background-size: 60px 60px;
+}
+
+/* Radar animation */
+@keyframes radarSweep {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.radar-sweep {
+  animation: radarSweep 4s linear infinite;
+}
+
+/* Scan line effect */
+@keyframes scanLine {
+  0% { top: -10%; }
+  100% { top: 110%; }
+}
+
+.scan-line::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  width: 100%;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, #4f8ef7, transparent);
+  animation: scanLine 3s linear infinite;
+}
+
+/* Stat counter animation */
+@keyframes countUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Orbit animation for drone illustration */
+@keyframes orbit {
+  0% { transform: rotate(0deg) translateX(120px) rotate(0deg); }
+  100% { transform: rotate(360deg) translateX(120px) rotate(-360deg); }
+}
+
+.orbit-item {
+  animation: orbit 12s linear infinite;
 }

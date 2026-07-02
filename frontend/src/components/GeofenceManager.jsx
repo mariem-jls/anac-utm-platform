@@ -23,7 +23,7 @@ const GeofenceManager = () => {
   const [error, setError] = useState(null)
   const [selectedZone, setSelectedZone] = useState(null)
   const [isDrawing, setIsDrawing] = useState(false)
-  const [showForm, setShowForm] = useState(false) // ← NOUVEAU : contrôle l'affichage du formulaire
+  const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState({
     name: '',
     lat: 36.8,
@@ -88,7 +88,7 @@ const GeofenceManager = () => {
         if (isDrawingRef.current) {
           const { lat, lng } = e.latlng
           
-          // Mettre à jour le formulaire
+          // Mettre à jour le formulaire avec les coordonnées du clic
           setForm(prev => ({
             ...prev,
             lat: lat,
@@ -120,10 +120,10 @@ const GeofenceManager = () => {
           }).addTo(map)
           drawCircleRef.current = circle
           
-          // Désactiver le mode dessin mais GARDER le formulaire affiché
+          // Désactiver le mode dessin mais garder le formulaire affiché
           setIsDrawing(false)
           isDrawingRef.current = false
-          setShowForm(true)  // ← IMPORTANT : garder le formulaire visible
+          setShowForm(true)
           
           console.log('✅ Zone placée, formulaire disponible')
         }
@@ -196,10 +196,22 @@ const GeofenceManager = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault()
+    
+    // Vérifier que les coordonnées sont valides
+    if (!form.lat || !form.lng) {
+      setError('Veuillez cliquer sur la carte pour définir la position de la zone')
+      return
+    }
+
+    if (!form.name.trim()) {
+      setError('Veuillez saisir un nom pour la zone')
+      return
+    }
+
     setLoading(true)
     try {
       const zoneData = {
-        name: form.name,
+        name: form.name.trim(),
         lat: form.lat,
         lng: form.lng,
         radius: form.radius,
@@ -271,7 +283,7 @@ const GeofenceManager = () => {
     setError(null)
     setIsDrawing(false)
     isDrawingRef.current = false
-    setShowForm(false)  // ← Cacher le formulaire
+    setShowForm(false)
     
     if (drawMarkerRef.current) {
       mapRef.current?.removeLayer(drawMarkerRef.current)
@@ -287,7 +299,7 @@ const GeofenceManager = () => {
     console.log('✏️ Mode dessin activé')
     setIsDrawing(true)
     isDrawingRef.current = true
-    setShowForm(true)  // ← Afficher le formulaire
+    setShowForm(true)
     setSelectedZone(null)
     setForm(prev => ({
       ...prev,
@@ -363,7 +375,7 @@ const GeofenceManager = () => {
 
         {/* Panneau de droite */}
         <div className="w-96 bg-[#111827] border-l border-[#1f2937] flex flex-col flex-shrink-0 overflow-hidden">
-          {/* Formulaire - s'affiche si showForm est vrai */}
+          {/* Formulaire */}
           <div className="flex-shrink-0 p-4 border-b border-[#1f2937] overflow-y-auto max-h-[50%]">
             <h3 className="text-sm font-medium text-white mb-3">
               {selectedZone ? 'Modifier la zone' : showForm ? 'Nouvelle zone' : 'Selectionnez une zone'}
@@ -371,42 +383,62 @@ const GeofenceManager = () => {
             
             {showForm && (
               <form onSubmit={handleSubmit} className="space-y-3">
+                {/* Message d'information */}
+                <div className="p-2 bg-[#4f8ef7]/10 border border-[#4f8ef7]/30 rounded-lg text-xs text-[#4f8ef7] flex items-center gap-2">
+                  <MapPin className="w-4 h-4 flex-shrink-0" />
+                  <span>Cliquez sur la carte pour définir la position, puis remplissez le formulaire</span>
+                </div>
+
                 <div>
-                  <label className="block text-xs text-[#64748b] mb-1">Nom</label>
+                  <label className="block text-xs text-[#64748b] mb-1">Nom de la zone</label>
                   <input
                     type="text"
                     value={form.name}
                     onChange={(e) => setForm({ ...form, name: e.target.value })}
-                    placeholder="Nom de la zone"
+                    placeholder="Ex: Zone interdite Tunis-Carthage"
                     className="w-full px-3 py-1.5 bg-[#1a2332] border border-[#1f2937] rounded-lg text-white text-sm focus:outline-none focus:border-[#4f8ef7]"
                     required
                   />
                 </div>
                 
                 <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs text-[#64748b] mb-1">Latitude</label>
-                    <input
-                      type="number"
-                      step="0.000001"
-                      value={form.lat}
-                      onChange={(e) => setForm({ ...form, lat: parseFloat(e.target.value) })}
-                      className="w-full px-3 py-1.5 bg-[#1a2332] border border-[#1f2937] rounded-lg text-white text-sm focus:outline-none focus:border-[#4f8ef7]"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs text-[#64748b] mb-1">Longitude</label>
-                    <input
-                      type="number"
-                      step="0.000001"
-                      value={form.lng}
-                      onChange={(e) => setForm({ ...form, lng: parseFloat(e.target.value) })}
-                      className="w-full px-3 py-1.5 bg-[#1a2332] border border-[#1f2937] rounded-lg text-white text-sm focus:outline-none focus:border-[#4f8ef7]"
-                      required
-                    />
-                  </div>
-                </div>
+  <div>
+    <label className="block text-xs text-[#64748b] mb-1">Latitude</label>
+    <input
+      type="text"
+      value={form.lat}
+      onChange={(e) => {
+        const val = e.target.value.replace(',', '.')
+        const num = parseFloat(val)
+        if (!isNaN(num)) {
+          setForm({ ...form, lat: num })
+        } else if (val === '' || val === '-') {
+          setForm({ ...form, lat: val })
+        }
+      }}
+      placeholder="36.800000"
+      className="w-full px-3 py-1.5 bg-[#1a2332] border border-[#1f2937] rounded-lg text-white text-sm focus:outline-none focus:border-[#4f8ef7]"
+    />
+  </div>
+  <div>
+    <label className="block text-xs text-[#64748b] mb-1">Longitude</label>
+    <input
+      type="text"
+      value={form.lng}
+      onChange={(e) => {
+        const val = e.target.value.replace(',', '.')
+        const num = parseFloat(val)
+        if (!isNaN(num)) {
+          setForm({ ...form, lng: num })
+        } else if (val === '' || val === '-') {
+          setForm({ ...form, lng: val })
+        }
+      }}
+      placeholder="10.180000"
+      className="w-full px-3 py-1.5 bg-[#1a2332] border border-[#1f2937] rounded-lg text-white text-sm focus:outline-none focus:border-[#4f8ef7]"
+    />
+  </div>
+</div>
                 
                 <div>
                   <label className="block text-xs text-[#64748b] mb-1">Rayon (mètres)</label>
@@ -475,7 +507,7 @@ const GeofenceManager = () => {
             {!showForm && (
               <div className="text-center py-8 text-[#64748b]">
                 <MapPin className="w-8 h-8 mx-auto mb-2 opacity-20" />
-                <p className="text-sm">Cliquez sur "Nouvelle zone" ou sur une zone existante</p>
+                <p className="text-sm">Cliquez sur "Nouvelle zone" puis sur la carte</p>
               </div>
             )}
           </div>

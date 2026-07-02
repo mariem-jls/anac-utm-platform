@@ -13,7 +13,7 @@ PORT = 1883
 DRONES = [
     {
         "id": "TN-DRN-001",
-        "lat": 36.8190,
+        "lat": 36.8190,   # Tunis Nord
         "lng": 10.1658,
         "altitude": 50,
         "speed": 0,
@@ -23,7 +23,7 @@ DRONES = [
     },
     {
         "id": "TN-DRN-002",
-        "lat": 36.8500,  # Proche de Tunis-Carthage CTR
+        "lat": 36.8450,   # Proche de Tunis-Carthage CTR (zone critique)
         "lng": 10.2200,
         "altitude": 60,
         "speed": 0,
@@ -33,8 +33,8 @@ DRONES = [
     },
     {
         "id": "TN-DRN-003",
-        "lat": 36.7500,  # Loin des zones, vol normal
-        "lng": 10.0500,
+        "lat": 36.7800,   # Tunis Sud
+        "lng": 10.1000,
         "altitude": 45,
         "speed": 0,
         "battery": 100,
@@ -64,9 +64,9 @@ def generate_telemetry(drone):
     """Génère une nouvelle position pour un drone"""
     # Mouvement différent selon le drone
     if drone["id"] == "TN-DRN-002":
-        # Drone 002 : se dirige vers la zone critique
-        drone["lng"] += 0.0005
-        drone["lat"] += 0.0003
+        # Drone 002 : se dirige vers la zone critique (Tunis-Carthage)
+        drone["lng"] += 0.0008
+        drone["lat"] += 0.0005
         drone["altitude"] += random.uniform(-2, 5)
         drone["speed"] = random.uniform(15, 35)
         drone["battery"] -= random.uniform(0, 0.3)
@@ -76,7 +76,7 @@ def generate_telemetry(drone):
         drone["zone"] = "critical" if is_violation else "warning"
         drone["status"] = "alert" if is_violation else "warning"
     else:
-        # Drone 001 et 003 : vol normal aléatoire
+        # Drone 001 et 003 : vol normal autour de leurs positions
         drone["lng"] += random.uniform(-0.002, 0.002)
         drone["lat"] += random.uniform(-0.002, 0.002)
         drone["altitude"] += random.uniform(-5, 8)

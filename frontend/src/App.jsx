@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, Link } from 'react-router-dom'
 import { supabase } from './lib/supabase'
 import Map from './components/Map'
@@ -7,6 +7,7 @@ import AdminDrones from './components/AdminDrones'
 import OperatorDrones from './components/OperatorDrones'
 import PoliceScanner from './components/PoliceScanner'
 import GeofenceManager from './components/GeofenceManager'
+import { LandingPage } from './components/landing'
 import { 
   Satellite, 
   Drone, 
@@ -17,11 +18,90 @@ import {
   PlusCircle,
   List,
   Home,
-  MapPin,
-  AlertTriangle,
-  CheckCircle,
-  Clock
+  MapPin
 } from 'lucide-react'
+
+const PlatformLayout = ({ user, profile, onLogout, children }) => (
+  <div className="h-screen flex flex-col bg-[#0a0e1a] overflow-hidden">
+    <header className="bg-[#111827] border-b border-[#1f2937] px-6 py-3 flex justify-between items-center flex-shrink-0 z-50">
+      <div className="flex items-center gap-3">
+        <div className="bg-[#4f8ef7]/10 p-2 rounded-lg">
+          <Satellite className="w-5 h-5 text-[#4f8ef7]" />
+        </div>
+        <div>
+          <h1 className="text-lg font-semibold text-white">UTM Platform</h1>
+          <p className="text-xs text-[#64748b]">ANAC Tunisie</p>
+        </div>
+      </div>
+
+      <div className="flex items-center gap-4">
+        <nav className="flex items-center gap-1">
+          <Link to="/platform" className="px-3 py-1.5 text-sm text-[#64748b] hover:text-white hover:bg-[#1f2937] rounded-lg transition-colors">
+            <Home className="w-4 h-4 inline mr-1" />
+            Accueil
+          </Link>
+
+          {profile?.role === 'operator' && (
+            <>
+              <Link to="/operator/register" className="px-3 py-1.5 text-sm text-[#64748b] hover:text-white hover:bg-[#1f2937] rounded-lg transition-colors">
+                <PlusCircle className="w-4 h-4 inline mr-1" />
+                Immatriculer
+              </Link>
+              <Link to="/operator/drones" className="px-3 py-1.5 text-sm text-[#64748b] hover:text-white hover:bg-[#1f2937] rounded-lg transition-colors">
+                <List className="w-4 h-4 inline mr-1" />
+                Mes drones
+              </Link>
+            </>
+          )}
+
+          {profile?.role === 'admin' && (
+            <>
+              <Link to="/admin/drones" className="px-3 py-1.5 text-sm text-[#64748b] hover:text-white hover:bg-[#1f2937] rounded-lg transition-colors">
+                <ClipboardCheck className="w-4 h-4 inline mr-1" />
+                Valider
+              </Link>
+              <Link to="/admin/zones" className="px-3 py-1.5 text-sm text-[#64748b] hover:text-white hover:bg-[#1f2937] rounded-lg transition-colors">
+                <MapPin className="w-4 h-4 inline mr-1" />
+                Zones
+              </Link>
+            </>
+          )}
+
+          {profile?.role === 'police' && (
+            <Link to="/police/scan" className="px-3 py-1.5 text-sm text-[#64748b] hover:text-white hover:bg-[#1f2937] rounded-lg transition-colors">
+              <Shield className="w-4 h-4 inline mr-1" />
+              Scanner
+            </Link>
+          )}
+        </nav>
+
+        <div className="flex items-center gap-3 text-sm border-l border-[#1f2937] pl-4">
+          <div className="flex items-center gap-2">
+            <User className="w-4 h-4 text-[#64748b]" />
+            <span className="text-[#e2e8f0]">{user?.email}</span>
+            <span className={`text-xs px-2 py-0.5 rounded-full ${
+              profile?.role === 'admin' ? 'bg-[#4f8ef7]/20 text-[#4f8ef7]' :
+              profile?.role === 'police' ? 'bg-[#f5a623]/20 text-[#f5a623]' :
+              'bg-[#22c55e]/20 text-[#22c55e]'
+            }`}>
+              {profile?.role || 'operator'}
+            </span>
+          </div>
+          <button
+            onClick={onLogout}
+            className="p-1.5 hover:bg-[#1f2937] rounded-lg transition-colors text-[#64748b] hover:text-white"
+          >
+            <LogOut className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <div className="flex-1 min-h-0 flex">
+      {children}
+    </div>
+  </div>
+)
 
 function App() {
   const [user, setUser] = useState(null)
@@ -30,7 +110,6 @@ function App() {
   const [drones, setDrones] = useState([])
   const [selectedDrone, setSelectedDrone] = useState(null)
   const [logs, setLogs] = useState([])
-  const mapRef = useRef(null)
 
   // ============================================================
   // AUTHENTIFICATION
@@ -82,25 +161,48 @@ function App() {
   // DONNEES DES DRONES
   // ============================================================
 
-  const fetchAllDrones = useCallback(async () => {
-    try {
-      const { data, error } = await supabase
-        .from('telemetry')
-        .select('*')
-        .order('recorded_at', { ascending: false })
-        .limit(30)
+const fetchAllDrones = useCallback(async () => {
+  try {
+    console.log('🔍 Récupération des données depuis Supabase...')
+    
+    const { data, error } = await supabase
+      .from('telemetry')
+      .select('*')
+      .order('recorded_at', { ascending: false })
+      .limit(30)
+    
+    if (error) throw error
+    
+    console.log('📊 Données brutes reçues:', data)
+    
+    if (!data || data.length === 0) {
+      console.warn('⚠️ Aucune donnée trouvée dans telemetry')
+      setDrones([])
+      return
+    }
+    
+    // Grouper par drone_id
+    const latestByDrone = {}
+    data.forEach(tele => {
+      const droneId = tele.drone_id
+      if (!droneId) return // Ignorer les entrées sans drone_id
       
-      if (error) throw error
+      if (!latestByDrone[droneId] || 
+          new Date(tele.recorded_at) > new Date(latestByDrone[droneId].recorded_at)) {
+        latestByDrone[droneId] = tele
+      }
+    })
+    
+    console.log('📦 Dernières données par drone:', Object.keys(latestByDrone))
+    
+    const dronesList = Object.values(latestByDrone).map(tele => {
+      // Déterminer le statut
+      let status = 'active'
+      if (tele.battery < 25) status = 'warning'
+      else if (tele.altitude > 120) status = 'warning'
+      else if (tele.drone_id === 'TN-DRN-002' && tele.lat > 36.85) status = 'alert'
       
-      const latestByDrone = {}
-      data.forEach(tele => {
-        if (!latestByDrone[tele.drone_id] || 
-            new Date(tele.recorded_at) > new Date(latestByDrone[tele.drone_id].recorded_at)) {
-          latestByDrone[tele.drone_id] = tele
-        }
-      })
-      
-      const dronesList = Object.values(latestByDrone).map(tele => ({
+      return {
         id: tele.drone_id,
         lat: tele.lat,
         lng: tele.lng,
@@ -108,19 +210,20 @@ function App() {
         speed: tele.speed,
         battery: tele.battery,
         lastUpdate: tele.recorded_at,
-        status: tele.battery < 25 ? 'warning' : 
-                tele.altitude > 120 ? 'warning' : 
-                tele.drone_id === 'TN-DRN-002' && tele.lat > 36.85 ? 'alert' : 'active'
-      }))
-      
-      setDrones(dronesList)
-      if (!selectedDrone && dronesList.length > 0) {
-        setSelectedDrone(dronesList[0].id)
+        status: status
       }
-    } catch (error) {
-      console.error('Erreur:', error)
+    })
+    
+    console.log('🚁 Drones traités:', dronesList.map(d => `${d.id} (${d.status})`))
+    
+    setDrones(dronesList)
+    if (!selectedDrone && dronesList.length > 0) {
+      setSelectedDrone(dronesList[0].id)
     }
-  }, [selectedDrone])
+  } catch (error) {
+    console.error('❌ Erreur fetchAllDrones:', error)
+  }
+}, [selectedDrone])
 
   const fetchLogs = useCallback(async () => {
     try {
@@ -177,9 +280,10 @@ function App() {
   const warningDrones = drones.filter(d => d.status === 'warning').length
 
   // ============================================================
-  // RENDU — LOGIN
+  // RENDU — UN SEUL BrowserRouter
   // ============================================================
 
+  // Si chargement
   if (loading) {
     return (
       <div className="flex items-center justify-center h-screen bg-[#0a0e1a]">
@@ -191,155 +295,77 @@ function App() {
     )
   }
 
-  if (!user) {
-    return (
-      <div className="flex items-center justify-center h-screen bg-[#0a0e1a]">
-        <div className="bg-[#111827] p-8 rounded-xl border border-[#1f2937] w-96">
-          <div className="flex items-center gap-3 mb-6">
-            <div className="bg-[#4f8ef7]/10 p-2 rounded-lg">
-              <Satellite className="w-6 h-6 text-[#4f8ef7]" />
-            </div>
-            <div>
-              <h1 className="text-xl font-bold text-white">ANAC UTM</h1>
-              <p className="text-sm text-[#64748b]">Connexion requise</p>
-            </div>
-          </div>
-          
-          <form onSubmit={async (e) => {
-            e.preventDefault()
-            const form = e.target
-            const email = form.email.value
-            const password = form.password.value
-            
-            try {
-              const { error } = await supabase.auth.signInWithPassword({ email, password })
-              if (error) throw error
-            } catch (error) {
-              alert('Erreur: ' + error.message)
-            }
-          }}>
-            <div className="mb-4">
-              <label className="block text-sm text-[#e2e8f0] mb-1">Email</label>
-              <input
-                type="email"
-                name="email"
-                placeholder="votre@email.com"
-                className="w-full px-3 py-2 bg-[#1a2332] border border-[#1f2937] rounded-lg text-white focus:outline-none focus:border-[#4f8ef7]"
-                required
-              />
-            </div>
-            <div className="mb-6">
-              <label className="block text-sm text-[#e2e8f0] mb-1">Mot de passe</label>
-              <input
-                type="password"
-                name="password"
-                placeholder="••••••••"
-                className="w-full px-3 py-2 bg-[#1a2332] border border-[#1f2937] rounded-lg text-white focus:outline-none focus:border-[#4f8ef7]"
-                required
-              />
-            </div>
-            <button
-              type="submit"
-              className="w-full py-2 bg-[#4f8ef7] text-white rounded-lg font-medium hover:bg-[#3b7de0] transition-colors"
-            >
-              Se connecter
-            </button>
-          </form>
-        </div>
-      </div>
-    )
-  }
-
-  // ============================================================
-  // RENDU — APPLICATION PRINCIPALE
-  // ============================================================
-
   return (
     <BrowserRouter>
-      <div className="h-screen flex flex-col bg-[#0a0e1a] overflow-hidden">
-        {/* BARRE SUPERIEURE — FIXE */}
-        <header className="bg-[#111827] border-b border-[#1f2937] px-6 py-3 flex justify-between items-center flex-shrink-0 z-50">
-          <div className="flex items-center gap-3">
-            <div className="bg-[#4f8ef7]/10 p-2 rounded-lg">
-              <Satellite className="w-5 h-5 text-[#4f8ef7]" />
-            </div>
-            <div>
-              <h1 className="text-lg font-semibold text-white">UTM Platform</h1>
-              <p className="text-xs text-[#64748b]">ANAC Tunisie</p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-4">
-            {/* Navigation selon le role */}
-            <nav className="flex items-center gap-1">
-              <Link to="/" className="px-3 py-1.5 text-sm text-[#64748b] hover:text-white hover:bg-[#1f2937] rounded-lg transition-colors">
-                <Home className="w-4 h-4 inline mr-1" />
-                Accueil
-              </Link>
-
-              {profile?.role === 'operator' && (
-                <>
-                  <Link to="/operator/register" className="px-3 py-1.5 text-sm text-[#64748b] hover:text-white hover:bg-[#1f2937] rounded-lg transition-colors">
-                    <PlusCircle className="w-4 h-4 inline mr-1" />
-                    Immatriculer
-                  </Link>
-                  <Link to="/operator/drones" className="px-3 py-1.5 text-sm text-[#64748b] hover:text-white hover:bg-[#1f2937] rounded-lg transition-colors">
-                    <List className="w-4 h-4 inline mr-1" />
-                    Mes drones
-                  </Link>
-                </>
-              )}
-
-              {profile?.role === 'admin' && (
-                <>
-                  <Link to="/admin/drones" className="px-3 py-1.5 text-sm text-[#64748b] hover:text-white hover:bg-[#1f2937] rounded-lg transition-colors">
-                    <ClipboardCheck className="w-4 h-4 inline mr-1" />
-                    Valider
-                  </Link>
-                  <Link to="/admin/zones" className="px-3 py-1.5 text-sm text-[#64748b] hover:text-white hover:bg-[#1f2937] rounded-lg transition-colors">
-                    <MapPin className="w-4 h-4 inline mr-1" />
-                    Zones
-                  </Link>
-                </>
-              )}
-
-              {profile?.role === 'police' && (
-                <Link to="/police/scan" className="px-3 py-1.5 text-sm text-[#64748b] hover:text-white hover:bg-[#1f2937] rounded-lg transition-colors">
-                  <Shield className="w-4 h-4 inline mr-1" />
-                  Scanner
-                </Link>
-              )}
-            </nav>
-
-            <div className="flex items-center gap-3 text-sm border-l border-[#1f2937] pl-4">
-              <div className="flex items-center gap-2">
-                <User className="w-4 h-4 text-[#64748b]" />
-                <span className="text-[#e2e8f0]">{user.email}</span>
-                <span className={`text-xs px-2 py-0.5 rounded-full ${
-                  profile?.role === 'admin' ? 'bg-[#4f8ef7]/20 text-[#4f8ef7]' :
-                  profile?.role === 'police' ? 'bg-[#f5a623]/20 text-[#f5a623]' :
-                  'bg-[#22c55e]/20 text-[#22c55e]'
-                }`}>
-                  {profile?.role || 'operator'}
-                </span>
+      <Routes>
+        {/* Landing Page — accessible à tous */}
+        <Route path="/" element={<LandingPage />} />
+        
+        {/* Page de login — accessible à tous */}
+        <Route path="/login" element={
+          <div className="flex items-center justify-center h-screen bg-[#0a0e1a]">
+            <div className="bg-[#111827] p-8 rounded-xl border border-[#1f2937] w-96">
+              <div className="flex items-center gap-3 mb-6">
+                <div className="bg-[#4f8ef7]/10 p-2 rounded-lg">
+                  <Satellite className="w-6 h-6 text-[#4f8ef7]" />
+                </div>
+                <div>
+                  <h1 className="text-xl font-bold text-white">ANAC UTM</h1>
+                  <p className="text-sm text-[#64748b]">Connexion requise</p>
+                </div>
               </div>
-              <button
-                onClick={handleLogout}
-                className="p-1.5 hover:bg-[#1f2937] rounded-lg transition-colors text-[#64748b] hover:text-white"
-              >
-                <LogOut className="w-4 h-4" />
-              </button>
+              
+              <form onSubmit={async (e) => {
+                e.preventDefault()
+                const form = e.target
+                const email = form.email.value
+                const password = form.password.value
+                
+                try {
+                  const { error } = await supabase.auth.signInWithPassword({ email, password })
+                  if (error) throw error
+                  // Rediriger vers /platform après connexion
+                  window.location.href = '/platform'
+                } catch (error) {
+                  alert('Erreur: ' + error.message)
+                }
+              }}>
+                <div className="mb-4">
+                  <label className="block text-sm text-[#e2e8f0] mb-1">Email</label>
+                  <input
+                    type="email"
+                    name="email"
+                    placeholder="votre@email.com"
+                    className="w-full px-3 py-2 bg-[#1a2332] border border-[#1f2937] rounded-lg text-white focus:outline-none focus:border-[#4f8ef7]"
+                    required
+                  />
+                </div>
+                <div className="mb-6">
+                  <label className="block text-sm text-[#e2e8f0] mb-1">Mot de passe</label>
+                  <input
+                    type="password"
+                    name="password"
+                    placeholder="••••••••"
+                    className="w-full px-3 py-2 bg-[#1a2332] border border-[#1f2937] rounded-lg text-white focus:outline-none focus:border-[#4f8ef7]"
+                    required
+                  />
+                </div>
+                <button
+                  type="submit"
+                  className="w-full py-2 bg-[#4f8ef7] text-white rounded-lg font-medium hover:bg-[#3b7de0] transition-colors"
+                >
+                  Se connecter
+                </button>
+              </form>
             </div>
           </div>
-        </header>
+        } />
 
-        {/* CONTENU PRINCIPAL — occupe tout l'espace restant */}
-        <div className="flex-1 min-h-0 flex">
-          <Routes>
-            {/* Page d'accueil = carte + panneau droit */}
-            <Route path="/" element={
-              <>
-                {/* Carte */}
+        {/* Routes protégées — nécessitent d'être connecté */}
+        {user ? (
+          <>
+            <Route path="/platform" element={
+              <PlatformLayout user={user} profile={profile} onLogout={handleLogout}>
                 <div className="flex-1 relative">
                   <Map 
                     drones={drones} 
@@ -347,7 +373,6 @@ function App() {
                     selectedDrone={selectedDrone}
                   />
                   
-                  {/* Mini statistiques en overlay */}
                   <div className="absolute top-4 left-4 flex gap-2 z-[500]">
                     <div className="bg-[#111827]/90 backdrop-blur-sm border border-[#1f2937] rounded-lg px-3 py-1.5 text-xs flex items-center gap-2">
                       <div className="w-2 h-2 bg-[#22c55e] rounded-full"></div>
@@ -371,9 +396,7 @@ function App() {
                   </div>
                 </div>
 
-                {/* Panneau de droite — fixe */}
                 <div className="w-80 bg-[#111827] border-l border-[#1f2937] flex flex-col flex-shrink-0 h-full overflow-hidden">
-                  {/* Partie fixe : Infos drone */}
                   <div className="flex-shrink-0 p-4 border-b border-[#1f2937]">
                     <div className="flex items-center gap-2 mb-3">
                       <Drone className="w-4 h-4 text-[#4f8ef7]" />
@@ -424,7 +447,6 @@ function App() {
                     )}
                   </div>
 
-                  {/* Partie défilable : Logs */}
                   <div className="flex-1 overflow-y-auto p-4">
                     <h3 className="text-sm font-medium text-white mb-3">Journal d'evenements</h3>
                     <div className="space-y-1.5 pr-1">
@@ -462,7 +484,6 @@ function App() {
                     </div>
                   </div>
 
-                  {/* Partie fixe : Bouton Recentrer en bas */}
                   <div className="flex-shrink-0 p-4 border-t border-[#1f2937] bg-[#111827]">
                     <button
                       onClick={() => {
@@ -477,52 +498,62 @@ function App() {
                     </button>
                   </div>
                 </div>
-              </>
+              </PlatformLayout>
             } />
 
-            {/* Routes opérateur */}
             <Route path="/operator/register" element={
-              <div className="flex-1 flex items-center justify-center p-6 bg-[#0a0e1a] overflow-auto">
-                <RegisterDrone user={user} />
-              </div>
+              <PlatformLayout user={user} profile={profile} onLogout={handleLogout}>
+                <div className="flex-1 flex items-center justify-center p-6 bg-[#0a0e1a] overflow-auto">
+                  <RegisterDrone user={user} />
+                </div>
+              </PlatformLayout>
             } />
             
             <Route path="/operator/drones" element={
-              <div className="flex-1 flex items-start justify-center p-6 bg-[#0a0e1a] overflow-auto">
-                <OperatorDrones user={user} />
-              </div>
+              <PlatformLayout user={user} profile={profile} onLogout={handleLogout}>
+                <div className="flex-1 flex items-start justify-center p-6 bg-[#0a0e1a] overflow-auto">
+                  <OperatorDrones user={user} />
+                </div>
+              </PlatformLayout>
             } />
 
-            {/* Routes admin */}
             <Route path="/admin/drones" element={
-              <div className="flex-1 p-6 bg-[#0a0e1a] overflow-auto">
-                <AdminDrones />
-              </div>
+              <PlatformLayout user={user} profile={profile} onLogout={handleLogout}>
+                <div className="flex-1 p-6 bg-[#0a0e1a] overflow-auto">
+                  <AdminDrones />
+                </div>
+              </PlatformLayout>
             } />
 
             <Route path="/admin/zones" element={
-              <div className="flex-1 bg-[#0a0e1a] overflow-hidden">
-                <GeofenceManager />
-              </div>
+              <PlatformLayout user={user} profile={profile} onLogout={handleLogout}>
+                <div className="flex-1 bg-[#0a0e1a] overflow-hidden">
+                  <GeofenceManager />
+                </div>
+              </PlatformLayout>
             } />
 
-            {/* Routes police */}
             <Route path="/police/scan" element={
-              <div className="flex-1 bg-[#0a0e1a] overflow-auto">
-                <PoliceScanner />
-              </div>
+              <PlatformLayout user={user} profile={profile} onLogout={handleLogout}>
+                <div className="flex-1 bg-[#0a0e1a] overflow-auto">
+                  <PoliceScanner />
+                </div>
+              </PlatformLayout>
             } />
+            
             <Route path="/verify" element={
-              <div className="flex-1 bg-[#0a0e1a] overflow-auto">
-                <PoliceScanner />
-              </div>
+              <PlatformLayout user={user} profile={profile} onLogout={handleLogout}>
+                <div className="flex-1 bg-[#0a0e1a] overflow-auto">
+                  <PoliceScanner />
+                </div>
+              </PlatformLayout>
             } />
+          </>
+        ) : null}
 
-            {/* Fallback */}
-            <Route path="*" element={<Navigate to="/" />} />
-          </Routes>
-        </div>
-      </div>
+        {/* Redirection par défaut */}
+        <Route path="*" element={<Navigate to={user ? "/platform" : "/"} />} />
+      </Routes>
     </BrowserRouter>
   )
 }

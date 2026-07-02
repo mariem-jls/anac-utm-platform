@@ -1,18 +1,21 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
+
 import { supabase } from '../lib/supabase'
 
 const Map = ({ drones, onSelectDrone, selectedDrone }) => {
+  console.log('Map reçoit les drones:', drones.map(d => d.id))
   const mapRef = useRef(null)
   const markersRef = useRef({})
   const circlesRef = useRef({})
   const zoneCirclesRef = useRef({})
   const [mapReady, setMapReady] = useState(false)
-  const [isFollowing, setIsFollowing] = useState(true)
+  const [isFollowing, setIsFollowing] = useState(false)
   const [zones, setZones] = useState([])
   const userInteracted = useRef(false)
   const updateTimeoutRef = useRef(null)
+  const initialFitDoneRef = useRef(false)
 
   // ============================================================
   // RÉCUPÉRATION DES ZONES DEPUIS SUPABASE
@@ -112,113 +115,99 @@ const Map = ({ drones, onSelectDrone, selectedDrone }) => {
   // ============================================================
   // METTRE À JOUR LES MARQUEURS DES DRONES
   // ============================================================
+const updateMarkers = useCallback(() => {
+  console.log('📍 updateMarkers, drones:', drones.length, drones.map(d => d.id))
+  
+  if (!mapRef.current || !mapReady) return
 
-  const updateMarkers = useCallback(() => {
+  const map = mapRef.current
+  const currentDroneIds = new Set(drones.map(d => d.id))
+
+  // Supprimer les anciens marqueurs
+  Object.keys(markersRef.current).forEach(id => {
+    if (!currentDroneIds.has(id)) {
+      map.removeLayer(markersRef.current[id])
+      delete markersRef.current[id]
+    }
+  })
+
+  // Créer les nouveaux marqueurs
+  drones.forEach(drone => {
+    const color = drone.status === 'alert' ? '#f04040' : drone.status === 'warning' ? '#f5a623' : '#4f8ef7'
+    
+    // UTILISER UN MARQUEUR STANDARD POUR TESTER
+    const marker = L.marker([drone.lat, drone.lng], {
+      title: drone.id
+    }).addTo(map)
+    
+    // Ajouter une popup
+    marker.bindPopup(`
+      <div style="font-family: sans-serif; padding: 8px;">
+        <strong style="color: ${color};">${drone.id}</strong><br/>
+        Status: ${drone.status}<br/>
+        Alt: ${drone.altitude}m<br/>
+        Batterie: ${drone.battery}%
+      </div>
+    `)
+    
+    marker.on('click', () => {
+      setIsFollowing(true)
+      userInteracted.current = false
+      onSelectDrone(drone.id)
+    })
+
+    markersRef.current[drone.id] = marker
+  })
+
+  // Forcer l'affichage de tous les drones
+  if (drones.length > 1) {
+    const bounds = L.latLngBounds(drones.map(d => [d.lat, d.lng]))
+    map.fitBounds(bounds, {
+      padding: [80, 80],
+      maxZoom: 12
+    })
+  }
+
+  console.log('📌 Marqueurs actifs:', Object.keys(markersRef.current))
+}, [drones, onSelectDrone, mapReady, isFollowing])
+
+  // Gérer les cercles de suivi sans relancer toute la mise à jour des marqueurs
+  useEffect(() => {
     if (!mapRef.current || !mapReady) return
 
     const map = mapRef.current
-    const currentDroneIds = new Set(drones.map(d => d.id))
 
-    // Supprimer les marqueurs des drones qui ne sont plus dans la liste
-    Object.keys(markersRef.current).forEach(id => {
-      if (!currentDroneIds.has(id)) {
-        map.removeLayer(markersRef.current[id])
-        delete markersRef.current[id]
-      }
+    Object.values(circlesRef.current).forEach(circle => {
+      map.removeLayer(circle)
     })
+    circlesRef.current = {}
 
-    // Mettre à jour ou créer les marqueurs
-    drones.forEach(drone => {
-      const isViolation = drone.status === 'alert'
-      const isWarning = drone.status === 'warning'
-      const color = isViolation ? '#f04040' : isWarning ? '#f5a623' : '#4f8ef7'
+    if (!selectedDrone) return
 
-      const icon = L.divIcon({
-        className: 'drone-marker',
-        html: `<div style="
-          width: 10px;
-          height: 10px;
-          border-radius: 50%;
-          background: ${color}33;
-          border: 2px solid ${color};
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          ${isViolation ? 'animation: pulse-alert 0.8s infinite;' : ''}
-        ">
-          <div style="
-            width: 4px;
-            height: 4px;
-            border-radius: 50%;
-            background: ${color};
-          "></div>
-        </div>
-        <div style="
-          font-family: monospace;
-          font-size: 8px;
-          color: ${color};
-          background: rgba(17, 24, 39, 0.9);
-          padding: 1px 5px;
-          border-radius: 3px;
-          margin-top: 2px;
-          border: 1px solid ${color}44;
-          white-space: nowrap;
-          font-weight: 500;
-        ">
-          ${drone.id.replace('TN-DRN-', 'DRN-')}
-        </div>`,
-        iconSize: [48, 30],
-        iconAnchor: [6, 6]
-      })
+    const selected = drones.find(d => d.id === selectedDrone)
+    if (!selected) return
 
-      const position = [drone.lat, drone.lng]
+    const isViolation = selected.status === 'alert'
+    const color = isViolation ? '#f04040' : '#4f8ef7'
+    const circle = L.circle([selected.lat, selected.lng], {
+      radius: 25,
+      color: color,
+      fillColor: color,
+      fillOpacity: 0.12,
+      weight: 1.5
+    }).addTo(map)
 
-      if (markersRef.current[drone.id]) {
-        markersRef.current[drone.id].setLatLng(position)
-        markersRef.current[drone.id].setIcon(icon)
-      } else {
-        const marker = L.marker(position, { icon })
-          .addTo(map)
-          .on('click', () => {
-            setIsFollowing(true)
-            userInteracted.current = false
-            onSelectDrone(drone.id)
-          })
+    circlesRef.current[selected.id] = circle
 
-        markersRef.current[drone.id] = marker
+    const circleTimeout = setTimeout(() => {
+      if (circlesRef.current[selected.id]) {
+        map.removeLayer(circlesRef.current[selected.id])
+        delete circlesRef.current[selected.id]
       }
-    })
+    }, 2000)
 
-    // Gérer les cercles de suivi
-    if (selectedDrone) {
-      const selected = drones.find(d => d.id === selectedDrone)
-      if (selected) {
-        Object.values(circlesRef.current).forEach(circle => {
-          map.removeLayer(circle)
-        })
-        circlesRef.current = {}
-
-        const isViolation = selected.status === 'alert'
-        const color = isViolation ? '#f04040' : '#4f8ef7'
-        const circle = L.circle([selected.lat, selected.lng], {
-          radius: 25,
-          color: color,
-          fillColor: color,
-          fillOpacity: 0.12,
-          weight: 1.5
-        }).addTo(map)
-
-        circlesRef.current[selected.id] = circle
-
-        setTimeout(() => {
-          if (circlesRef.current[selected.id]) {
-            map.removeLayer(circlesRef.current[selected.id])
-            delete circlesRef.current[selected.id]
-          }
-        }, 2000)
-      }
-    }
-  }, [drones, onSelectDrone, selectedDrone, mapReady])
+    return () => clearTimeout(circleTimeout)
+  }, [selectedDrone, drones, mapReady])
 
   // Mettre à jour les marqueurs avec debounce
   useEffect(() => {
@@ -237,7 +226,7 @@ const Map = ({ drones, onSelectDrone, selectedDrone }) => {
         clearTimeout(updateTimeoutRef.current)
       }
     }
-  }, [drones, selectedDrone, mapReady, updateMarkers])
+  }, [drones, mapReady, updateMarkers])
 
   // Recentrer sur le drone sélectionné
   useEffect(() => {
@@ -300,6 +289,21 @@ const Map = ({ drones, onSelectDrone, selectedDrone }) => {
           Suivi actif
         </div>
       )}
+      {/* Bouton Voir tous les drones */}
+<button
+  onClick={() => {
+    if (drones.length > 0) {
+      const bounds = L.latLngBounds(drones.map(d => [d.lat, d.lng]))
+      mapRef.current.fitBounds(bounds, {
+        padding: [50, 50],
+        maxZoom: 11
+      })
+    }
+  }}
+  className="absolute bottom-32 right-4 bg-[#1a2332] border border-[#4f8ef7] text-[#4f8ef7] px-3 py-1.5 rounded-lg text-xs z-[1000] hover:bg-[#4f8ef7]/10 transition-colors"
+>
+  Voir tous les drones
+</button>
 
       <style>{`
         @keyframes pulse-alert {

@@ -15,81 +15,118 @@ const geofenceZones = [
 
 function DroneMap() {
   const mapRef = useRef<HTMLDivElement>(null);
-  const mapInstanceRef = useRef<unknown>(null);
+  const mapInstanceRef = useRef<any>(null);
+  const isMountedRef = useRef(true);
 
   useEffect(() => {
-    if (!mapRef.current || mapInstanceRef.current) return;
+    isMountedRef.current = true;
 
-    // Dynamic import of leaflet
-    import('leaflet').then((L) => {
-      if (!mapRef.current) return;
+    const loadMap = async () => {
+      // Ne pas continuer si le composant est démonté ou si le conteneur n'existe pas
+      if (!isMountedRef.current || !mapRef.current) return;
 
-      const map = L.map(mapRef.current, {
-        center: [36.8065, 10.1815],
-        zoom: 13,
-        zoomControl: false,
-        attributionControl: true,
-      });
+      // Détruire l'ancienne instance si elle existe
+      if (mapInstanceRef.current) {
+        try {
+          mapInstanceRef.current.remove();
+        } catch (e) {
+          // Ignorer les erreurs de suppression
+        }
+        mapInstanceRef.current = null;
+      }
 
-      // Dark tile layer
-      L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-        attribution: '&copy; <a href="https://carto.com/">CARTO</a> | ANAC UTM',
-        subdomains: 'abcd',
-        maxZoom: 19,
-      }).addTo(map);
+      // Nettoyer complètement le conteneur
+      const container = mapRef.current;
+      container.innerHTML = '';
+      // Supprimer tous les attributs liés à Leaflet
+      while (container.hasChildNodes()) {
+        container.removeChild(container.firstChild!);
+      }
+      container.style.height = '100%';
+      container.style.width = '100%';
 
-      // Zoom control
-      L.control.zoom({ position: 'topright' }).addTo(map);
+      try {
+        const L = await import('leaflet');
+        
+        if (!isMountedRef.current || !mapRef.current) return;
 
-      // Add geofence zones
-      geofenceZones.forEach((zone) => {
-        const color = zone.type === 'restricted' ? '#ef4444' : '#f59e0b';
-        L.circle([zone.lat, zone.lng], {
-          radius: zone.radius,
-          color: color,
-          fillColor: color,
-          fillOpacity: 0.1,
-          weight: 2,
-          dashArray: zone.type === 'restricted' ? '5, 10' : undefined,
-        }).addTo(map).bindPopup(`<div style="font-family: 'Space Grotesk', sans-serif;"><b>${zone.name}</b><br/>Zone ${zone.type === 'restricted' ? 'interdite' : 'contrôlée'}</div>`);
-      });
+        const map = L.map(mapRef.current, {
+          center: [36.8065, 10.1815],
+          zoom: 13,
+          zoomControl: false,
+          attributionControl: true,
+        });
 
-      // Add drones
-      const droneIcon = L.divIcon({
-        className: 'drone-marker',
-        html: `<div style="width:32px;height:32px;background:linear-gradient(135deg,#4f8ef7,#00d4aa);border-radius:50%;display:flex;align-items:center;justify-content:center;border:2px solid white;box-shadow:0 0 20px rgba(79,142,247,0.5);"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><path d="M12 2L8 8h8l-4-6z"/><rect x="8" y="10" width="8" height="4" rx="1"/><circle cx="6" cy="8" r="2"/><circle cx="18" cy="8" r="2"/><line x1="12" y1="14" x2="12" y2="20"/><line x1="8" y1="20" x2="16" y2="20"/></svg></div>`,
-        iconSize: [32, 32],
-        iconAnchor: [16, 16],
-      });
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+          attribution: '© CARTO | ANAC UTM',
+          subdomains: 'abcd',
+          maxZoom: 19,
+        }).addTo(map);
 
-      simulatedDrones.forEach((drone) => {
-        L.marker([drone.lat, drone.lng], { icon: droneIcon })
-          .addTo(map)
-          .bindPopup(`
-            <div style="font-family: 'Space Grotesk', sans-serif; min-width: 150px;">
-              <div style="font-weight: 700; color: #4f8ef7; margin-bottom: 4px;">${drone.id}</div>
-              <div style="font-size: 12px; color: #94a3b8;">
-                Altitude: ${drone.alt}m<br/>
-                Vitesse: ${drone.speed} km/h<br/>
-                Batterie: ${drone.battery}%<br/>
-                Statut: <span style="color: ${drone.status === 'active' ? '#00d4aa' : '#f59e0b'};">${drone.status === 'active' ? 'Actif' : 'Alerte'}</span>
+        L.control.zoom({ position: 'topright' }).addTo(map);
+
+        // Ajouter les zones
+        geofenceZones.forEach((zone) => {
+          const color = zone.type === 'restricted' ? '#ef4444' : '#f59e0b';
+          L.circle([zone.lat, zone.lng], {
+            radius: zone.radius,
+            color: color,
+            fillColor: color,
+            fillOpacity: 0.1,
+            weight: 2,
+            dashArray: zone.type === 'restricted' ? '5, 10' : undefined,
+          }).addTo(map).bindPopup(`<div style="font-family: sans-serif;"><b>${zone.name}</b><br/>Zone ${zone.type === 'restricted' ? 'interdite' : 'contrôlée'}</div>`);
+        });
+
+        // Ajouter les drones
+        const droneIcon = L.divIcon({
+          className: 'drone-marker',
+          html: `<div style="width:32px;height:32px;background:linear-gradient(135deg,#4f8ef7,#00d4aa);border-radius:50%;display:flex;align-items:center;justify-content:center;border:2px solid white;box-shadow:0 0 20px rgba(79,142,247,0.5);"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><path d="M12 2L8 8h8l-4-6z"/><rect x="8" y="10" width="8" height="4" rx="1"/><circle cx="6" cy="8" r="2"/><circle cx="18" cy="8" r="2"/><line x1="12" y1="14" x2="12" y2="20"/><line x1="8" y1="20" x2="16" y2="20"/></svg></div>`,
+          iconSize: [32, 32],
+          iconAnchor: [16, 16],
+        });
+
+        simulatedDrones.forEach((drone) => {
+          L.marker([drone.lat, drone.lng], { icon: droneIcon })
+            .addTo(map)
+            .bindPopup(`
+              <div style="font-family: sans-serif; min-width: 150px;">
+                <div style="font-weight: 700; color: #4f8ef7; margin-bottom: 4px;">${drone.id}</div>
+                <div style="font-size: 12px; color: #94a3b8;">
+                  Altitude: ${drone.alt}m<br/>
+                  Vitesse: ${drone.speed} km/h<br/>
+                  Batterie: ${drone.battery}%<br/>
+                  Statut: <span style="color: ${drone.status === 'active' ? '#00d4aa' : '#f59e0b'};">${drone.status === 'active' ? 'Actif' : 'Alerte'}</span>
+                </div>
               </div>
-            </div>
-          `);
-      });
+            `);
+        });
 
-      mapInstanceRef.current = map;
-    });
+        mapInstanceRef.current = map;
+      } catch (error) {
+        console.error('Erreur de chargement de la carte:', error);
+      }
+    };
+
+    loadMap();
 
     return () => {
+      isMountedRef.current = false;
       if (mapInstanceRef.current) {
-        (mapInstanceRef.current as { remove: () => void }).remove();
+        try {
+          mapInstanceRef.current.remove();
+        } catch (e) {
+          // Ignorer
+        }
         mapInstanceRef.current = null;
+      }
+      if (mapRef.current) {
+        mapRef.current.innerHTML = '';
       }
     };
   }, []);
 
-  return <div ref={mapRef} className="w-full h-full rounded-xl" />;
+  return <div ref={mapRef} className="w-full h-full rounded-xl" style={{ minHeight: '400px' }} />;
 }
 
 export default function Demo() {
@@ -144,13 +181,12 @@ export default function Demo() {
             </div>
 
             <div className="flex items-center gap-2">
-              <a
-                href="#"
+              <button
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-mono text-utm-text-muted hover:text-utm-blue hover:bg-utm-blue/10 transition-all"
               >
                 <Maximize2 className="w-3.5 h-3.5" />
                 Plein écran
-              </a>
+              </button>
             </div>
           </div>
 
@@ -193,7 +229,7 @@ export default function Demo() {
 
         {/* CTA */}
         <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mt-8">
-          <a href="#" className="btn-primary group">
+          <a href="/platform" className="btn-primary group">
             <span className="flex items-center gap-2">
               <ExternalLink className="w-4 h-4" />
               Accéder à la plateforme complète
