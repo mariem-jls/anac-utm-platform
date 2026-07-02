@@ -4,12 +4,15 @@ import { supabase } from './lib/supabase'
 import Map from './components/Map'
 import RegisterDrone from './components/RegisterDrone'
 import AdminDrones from './components/AdminDrones'
+import AdminFlightPlans from './components/AdminFlightPlans'
 import OperatorDrones from './components/OperatorDrones'
+import OperatorFlights from './components/OperatorFlights'
 import PoliceScanner from './components/PoliceScanner'
 import GeofenceManager from './components/GeofenceManager'
 import { LandingPage } from './components/landing'
 import AdminUsers from './components/AdminUsers'
 import AdminPolice from './components/AdminPolice'
+import FlightPlanForm from './components/FlightPlanForm'
 import Login from './components/Login'
 import SignUp from './components/SignUp'
 import { 
@@ -23,7 +26,8 @@ import {
   List,
   Home,
   MapPin,
-  UserPlus
+  UserPlus,
+  Calendar
 } from 'lucide-react'
 
 const PlatformLayout = ({ user, profile, onLogout, children }) => (
@@ -56,6 +60,10 @@ const PlatformLayout = ({ user, profile, onLogout, children }) => (
                 <List className="w-4 h-4 inline mr-1" />
                 Mes drones
               </Link>
+              <Link to="/operator/flights" className="px-3 py-1.5 text-sm text-[#64748b] hover:text-white hover:bg-[#1f2937] rounded-lg transition-colors">
+                <Calendar className="w-4 h-4 inline mr-1" />
+                Plan de vol
+              </Link>
             </>
           )}
 
@@ -65,18 +73,22 @@ const PlatformLayout = ({ user, profile, onLogout, children }) => (
                 <ClipboardCheck className="w-4 h-4 inline mr-1" />
                 Valider
               </Link>
+              <Link to="/admin/flights" className="px-3 py-1.5 text-sm text-[#64748b] hover:text-white hover:bg-[#1f2937] rounded-lg transition-colors">
+                <Calendar className="w-4 h-4 inline mr-1" />
+                Vols
+              </Link>
               <Link to="/admin/zones" className="px-3 py-1.5 text-sm text-[#64748b] hover:text-white hover:bg-[#1f2937] rounded-lg transition-colors">
                 <MapPin className="w-4 h-4 inline mr-1" />
                 Zones
               </Link>
-                  <Link to="/admin/users" className="px-3 py-1.5 text-sm text-[#64748b] hover:text-white hover:bg-[#1f2937] rounded-lg transition-colors">
-      <UserPlus className="w-4 h-4 inline mr-1" />
-      Creer
-    </Link>
-<Link to="/admin/police" className="px-3 py-1.5 text-sm text-[#64748b] hover:text-white hover:bg-[#1f2937] rounded-lg transition-colors">
-      <Shield className="w-4 h-4 inline mr-1" />
-      Agents
-    </Link>
+              <Link to="/admin/users" className="px-3 py-1.5 text-sm text-[#64748b] hover:text-white hover:bg-[#1f2937] rounded-lg transition-colors">
+                <UserPlus className="w-4 h-4 inline mr-1" />
+                Creer
+              </Link>
+              <Link to="/admin/police" className="px-3 py-1.5 text-sm text-[#64748b] hover:text-white hover:bg-[#1f2937] rounded-lg transition-colors">
+                <Shield className="w-4 h-4 inline mr-1" />
+                Agents
+              </Link>
             </>
           )}
 
@@ -571,10 +583,34 @@ const fetchAllDrones = useCallback(async () => {
               </PlatformLayout>
             } />
 
+            <Route path="/operator/flights" element={
+              <PlatformLayout user={user} profile={profile} onLogout={handleLogout}>
+                <div className="flex-1 flex items-start justify-center p-6 bg-[#0a0e1a] overflow-auto">
+                  <OperatorFlights user={user} />
+                </div>
+              </PlatformLayout>
+            } />
+
+            <Route path="/operator/flights/create" element={
+              <PlatformLayout user={user} profile={profile} onLogout={handleLogout}>
+                <div className="flex-1 flex items-center justify-center p-6 bg-[#0a0e1a] overflow-auto">
+                  <FlightPlanForm user={user} />
+                </div>
+              </PlatformLayout>
+            } />
+
             <Route path="/admin/drones" element={
               <PlatformLayout user={user} profile={profile} onLogout={handleLogout}>
                 <div className="flex-1 p-6 bg-[#0a0e1a] overflow-auto">
                   <AdminDrones />
+                </div>
+              </PlatformLayout>
+            } />
+
+            <Route path="/admin/flights" element={
+              <PlatformLayout user={user} profile={profile} onLogout={handleLogout}>
+                <div className="flex-1 p-6 bg-[#0a0e1a] overflow-auto">
+                  <AdminFlightPlans />
                 </div>
               </PlatformLayout>
             } />
@@ -588,19 +624,20 @@ const fetchAllDrones = useCallback(async () => {
             } />
 
             <Route path="/admin/users" element={
-  <PlatformLayout user={user} profile={profile} onLogout={handleLogout}>
-    <div className="flex-1 flex items-center justify-center p-6 bg-[#0a0e1a] overflow-auto">
-      <AdminUsers />
-    </div>
-  </PlatformLayout>
-} />
-<Route path="/admin/police" element={
-  <PlatformLayout user={user} profile={profile} onLogout={handleLogout}>
-    <div className="flex-1 flex items-center justify-center p-6 bg-[#0a0e1a] overflow-auto">
-      <AdminPolice />
-    </div>
-  </PlatformLayout>
-} />
+              <PlatformLayout user={user} profile={profile} onLogout={handleLogout}>
+                <div className="flex-1 flex items-center justify-center p-6 bg-[#0a0e1a] overflow-auto">
+                  <AdminUsers />
+                </div>
+              </PlatformLayout>
+            } />
+
+            <Route path="/admin/police" element={
+              <PlatformLayout user={user} profile={profile} onLogout={handleLogout}>
+                <div className="flex-1 flex items-center justify-center p-6 bg-[#0a0e1a] overflow-auto">
+                  <AdminPolice />
+                </div>
+              </PlatformLayout>
+            } />
 
             <Route path="/police/scan" element={
               <PlatformLayout user={user} profile={profile} onLogout={handleLogout}>
