@@ -8,6 +8,10 @@ import OperatorDrones from './components/OperatorDrones'
 import PoliceScanner from './components/PoliceScanner'
 import GeofenceManager from './components/GeofenceManager'
 import { LandingPage } from './components/landing'
+import AdminUsers from './components/AdminUsers'
+import AdminPolice from './components/AdminPolice'
+import Login from './components/Login'
+import SignUp from './components/SignUp'
 import { 
   Satellite, 
   Drone, 
@@ -18,7 +22,8 @@ import {
   PlusCircle,
   List,
   Home,
-  MapPin
+  MapPin,
+  UserPlus
 } from 'lucide-react'
 
 const PlatformLayout = ({ user, profile, onLogout, children }) => (
@@ -64,6 +69,14 @@ const PlatformLayout = ({ user, profile, onLogout, children }) => (
                 <MapPin className="w-4 h-4 inline mr-1" />
                 Zones
               </Link>
+                  <Link to="/admin/users" className="px-3 py-1.5 text-sm text-[#64748b] hover:text-white hover:bg-[#1f2937] rounded-lg transition-colors">
+      <UserPlus className="w-4 h-4 inline mr-1" />
+      Creer
+    </Link>
+<Link to="/admin/police" className="px-3 py-1.5 text-sm text-[#64748b] hover:text-white hover:bg-[#1f2937] rounded-lg transition-colors">
+      <Shield className="w-4 h-4 inline mr-1" />
+      Agents
+    </Link>
             </>
           )}
 
@@ -110,6 +123,10 @@ function App() {
   const [drones, setDrones] = useState([])
   const [selectedDrone, setSelectedDrone] = useState(null)
   const [logs, setLogs] = useState([])
+  const [logSeverityFilter, setLogSeverityFilter] = useState('all')
+  const [logDroneFilter, setLogDroneFilter] = useState('')
+  const [logPage, setLogPage] = useState(1)
+  const logPageSize = 8
 
   // ============================================================
   // AUTHENTIFICATION
@@ -231,7 +248,7 @@ const fetchAllDrones = useCallback(async () => {
         .from('drone_logs')
         .select('*')
         .order('created_at', { ascending: false })
-        .limit(20)
+        .limit(100)
       
       if (error) throw error
       setLogs(data || [])
@@ -239,6 +256,10 @@ const fetchAllDrones = useCallback(async () => {
       console.error('Erreur logs:', error)
     }
   }, [])
+
+  useEffect(() => {
+    setLogPage(1)
+  }, [logSeverityFilter, logDroneFilter])
 
   useEffect(() => {
     if (!user) return
@@ -278,6 +299,18 @@ const fetchAllDrones = useCallback(async () => {
   const activeDrones = drones.filter(d => d.status === 'active').length
   const alertDrones = drones.filter(d => d.status === 'alert').length
   const warningDrones = drones.filter(d => d.status === 'warning').length
+  const filteredLogs = logs.filter(log => {
+    const matchesSeverity = logSeverityFilter === 'all' || log.severity === logSeverityFilter
+    const matchesDrone = logDroneFilter.trim() === '' || log.drone_id?.toLowerCase().includes(logDroneFilter.trim().toLowerCase())
+
+    return matchesSeverity && matchesDrone
+  })
+  const totalLogPages = Math.max(1, Math.ceil(filteredLogs.length / logPageSize))
+  const safeLogPage = Math.min(logPage, totalLogPages)
+  const paginatedLogs = filteredLogs.slice(
+    (safeLogPage - 1) * logPageSize,
+    safeLogPage * logPageSize
+  )
 
   // ============================================================
   // RENDU — UN SEUL BrowserRouter
@@ -301,65 +334,9 @@ const fetchAllDrones = useCallback(async () => {
         {/* Landing Page — accessible à tous */}
         <Route path="/" element={<LandingPage />} />
         
-        {/* Page de login — accessible à tous */}
-        <Route path="/login" element={
-          <div className="flex items-center justify-center h-screen bg-[#0a0e1a]">
-            <div className="bg-[#111827] p-8 rounded-xl border border-[#1f2937] w-96">
-              <div className="flex items-center gap-3 mb-6">
-                <div className="bg-[#4f8ef7]/10 p-2 rounded-lg">
-                  <Satellite className="w-6 h-6 text-[#4f8ef7]" />
-                </div>
-                <div>
-                  <h1 className="text-xl font-bold text-white">ANAC UTM</h1>
-                  <p className="text-sm text-[#64748b]">Connexion requise</p>
-                </div>
-              </div>
-              
-              <form onSubmit={async (e) => {
-                e.preventDefault()
-                const form = e.target
-                const email = form.email.value
-                const password = form.password.value
-                
-                try {
-                  const { error } = await supabase.auth.signInWithPassword({ email, password })
-                  if (error) throw error
-                  // Rediriger vers /platform après connexion
-                  window.location.href = '/platform'
-                } catch (error) {
-                  alert('Erreur: ' + error.message)
-                }
-              }}>
-                <div className="mb-4">
-                  <label className="block text-sm text-[#e2e8f0] mb-1">Email</label>
-                  <input
-                    type="email"
-                    name="email"
-                    placeholder="votre@email.com"
-                    className="w-full px-3 py-2 bg-[#1a2332] border border-[#1f2937] rounded-lg text-white focus:outline-none focus:border-[#4f8ef7]"
-                    required
-                  />
-                </div>
-                <div className="mb-6">
-                  <label className="block text-sm text-[#e2e8f0] mb-1">Mot de passe</label>
-                  <input
-                    type="password"
-                    name="password"
-                    placeholder="••••••••"
-                    className="w-full px-3 py-2 bg-[#1a2332] border border-[#1f2937] rounded-lg text-white focus:outline-none focus:border-[#4f8ef7]"
-                    required
-                  />
-                </div>
-                <button
-                  type="submit"
-                  className="w-full py-2 bg-[#4f8ef7] text-white rounded-lg font-medium hover:bg-[#3b7de0] transition-colors"
-                >
-                  Se connecter
-                </button>
-              </form>
-            </div>
-          </div>
-        } />
+        <Route path="/login" element={<Login />} />
+        <Route path="/signup" element={<SignUp />} />
+        <Route path="/verify" element={<PoliceScanner />} />
 
         {/* Routes protégées — nécessitent d'être connecté */}
         {user ? (
@@ -448,14 +425,56 @@ const fetchAllDrones = useCallback(async () => {
                   </div>
 
                   <div className="flex-1 overflow-y-auto p-4">
-                    <h3 className="text-sm font-medium text-white mb-3">Journal d'evenements</h3>
-                    <div className="space-y-1.5 pr-1">
-                      {logs.length === 0 ? (
-                        <div className="text-[#64748b] text-sm text-center py-8">
-                          Aucun evenement
-                        </div>
-                      ) : (
-                        logs.map(log => (
+                    <div className="flex items-start justify-between gap-3 mb-3">
+                      <div>
+                        <h3 className="text-sm font-medium text-white">Journal d'evenements</h3>
+                        <p className="text-[11px] text-[#64748b] mt-1">
+                          Filtre par severite, recherche par drone et navigation page par page.
+                        </p>
+                      </div>
+                      <span className="text-[10px] px-2 py-0.5 rounded-full border border-[#1f2937] text-[#94a3b8] bg-[#0f172a]">
+                        {filteredLogs.length} entree{filteredLogs.length > 1 ? 's' : ''}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 gap-2 mb-3">
+                      <div className="flex flex-wrap gap-2">
+                        {[
+                          { value: 'all', label: 'Tous' },
+                          { value: 'critical', label: 'Critiques' },
+                          { value: 'warning', label: 'Alertes' },
+                          { value: 'info', label: 'Infos' }
+                        ].map(option => (
+                          <button
+                            key={option.value}
+                            onClick={() => setLogSeverityFilter(option.value)}
+                            className={`px-3 py-1.5 rounded-full text-xs border transition-colors ${
+                              logSeverityFilter === option.value
+                                ? 'bg-[#4f8ef7] border-[#4f8ef7] text-white'
+                                : 'bg-[#111827] border-[#1f2937] text-[#94a3b8] hover:border-[#4f8ef7]/40 hover:text-white'
+                            }`}
+                          >
+                            {option.label}
+                          </button>
+                        ))}
+                      </div>
+
+                      <input
+                        type="text"
+                        value={logDroneFilter}
+                        onChange={(e) => setLogDroneFilter(e.target.value)}
+                        placeholder="Filtrer par identifiant drone"
+                        className="w-full px-3 py-2 rounded-lg bg-[#111827] border border-[#1f2937] text-sm text-white placeholder:text-[#64748b] focus:outline-none focus:border-[#4f8ef7]"
+                      />
+                    </div>
+
+                    {filteredLogs.length === 0 ? (
+                      <div className="text-[#64748b] text-sm text-center py-8">
+                        Aucun evenement correspondant aux filtres
+                      </div>
+                    ) : (
+                      <div className="space-y-1.5 pr-1">
+                        {paginatedLogs.map(log => (
                           <div 
                             key={log.id} 
                             className={`p-2.5 rounded-lg border-l-2 text-sm ${
@@ -464,24 +483,59 @@ const fetchAllDrones = useCallback(async () => {
                               'border-[#4f8ef7] bg-[#4f8ef7]/5'
                             }`}
                           >
-                            <div className="flex items-center justify-between">
-                              <span className="text-[#64748b] text-xs">
-                                {new Date(log.created_at).toLocaleTimeString('fr-FR')}
-                              </span>
-                              <span className={`text-xs font-mono ${
-                                log.severity === 'critical' ? 'text-[#f04040]' :
-                                log.severity === 'warning' ? 'text-[#f5a623]' : 'text-[#4f8ef7]'
-                              }`}>
-                                [{log.drone_id}]
+                            <div className="flex items-center justify-between gap-3">
+                              <div className="flex items-center gap-2 min-w-0">
+                                <span className={`text-[10px] px-2 py-0.5 rounded-full border font-mono shrink-0 ${
+                                  log.severity === 'critical' ? 'text-[#f04040] border-[#f04040]/20 bg-[#f04040]/10' :
+                                  log.severity === 'warning' ? 'text-[#f5a623] border-[#f5a623]/20 bg-[#f5a623]/10' :
+                                  'text-[#4f8ef7] border-[#4f8ef7]/20 bg-[#4f8ef7]/10'
+                                }`}>
+                                  {log.severity || 'info'}
+                                </span>
+                                <span className="text-[#64748b] text-xs truncate">
+                                  {new Date(log.created_at).toLocaleString('fr-FR', {
+                                    day: '2-digit',
+                                    month: '2-digit',
+                                    hour: '2-digit',
+                                    minute: '2-digit'
+                                  })}
+                                </span>
+                              </div>
+                              <span className="text-xs font-mono text-[#94a3b8] shrink-0">
+                                {log.drone_id}
                               </span>
                             </div>
-                            <div className="text-[#e2e8f0] text-xs mt-0.5">
+                            <div className="text-[#e2e8f0] text-xs mt-1 leading-5">
                               {log.message}
                             </div>
                           </div>
-                        ))
-                      )}
-                    </div>
+                        ))}
+
+                        {totalLogPages > 1 && (
+                          <div className="flex items-center justify-between gap-2 pt-2">
+                            <button
+                              onClick={() => setLogPage(page => Math.max(1, page - 1))}
+                              disabled={safeLogPage === 1}
+                              className="px-3 py-1.5 rounded-lg text-xs border border-[#1f2937] text-[#94a3b8] bg-[#111827] disabled:opacity-40 disabled:cursor-not-allowed hover:text-white hover:border-[#4f8ef7]/40"
+                            >
+                              Précédent
+                            </button>
+
+                            <span className="text-[11px] text-[#64748b]">
+                              Page {safeLogPage} / {totalLogPages}
+                            </span>
+
+                            <button
+                              onClick={() => setLogPage(page => Math.min(totalLogPages, page + 1))}
+                              disabled={safeLogPage === totalLogPages}
+                              className="px-3 py-1.5 rounded-lg text-xs border border-[#1f2937] text-[#94a3b8] bg-[#111827] disabled:opacity-40 disabled:cursor-not-allowed hover:text-white hover:border-[#4f8ef7]/40"
+                            >
+                              Suivant
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
 
                   <div className="flex-shrink-0 p-4 border-t border-[#1f2937] bg-[#111827]">
@@ -533,15 +587,22 @@ const fetchAllDrones = useCallback(async () => {
               </PlatformLayout>
             } />
 
+            <Route path="/admin/users" element={
+  <PlatformLayout user={user} profile={profile} onLogout={handleLogout}>
+    <div className="flex-1 flex items-center justify-center p-6 bg-[#0a0e1a] overflow-auto">
+      <AdminUsers />
+    </div>
+  </PlatformLayout>
+} />
+<Route path="/admin/police" element={
+  <PlatformLayout user={user} profile={profile} onLogout={handleLogout}>
+    <div className="flex-1 flex items-center justify-center p-6 bg-[#0a0e1a] overflow-auto">
+      <AdminPolice />
+    </div>
+  </PlatformLayout>
+} />
+
             <Route path="/police/scan" element={
-              <PlatformLayout user={user} profile={profile} onLogout={handleLogout}>
-                <div className="flex-1 bg-[#0a0e1a] overflow-auto">
-                  <PoliceScanner />
-                </div>
-              </PlatformLayout>
-            } />
-            
-            <Route path="/verify" element={
               <PlatformLayout user={user} profile={profile} onLogout={handleLogout}>
                 <div className="flex-1 bg-[#0a0e1a] overflow-auto">
                   <PoliceScanner />

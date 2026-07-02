@@ -15,7 +15,6 @@ const Map = ({ drones, onSelectDrone, selectedDrone }) => {
   const [zones, setZones] = useState([])
   const userInteracted = useRef(false)
   const updateTimeoutRef = useRef(null)
-  const initialFitDoneRef = useRef(false)
 
   // ============================================================
   // RÉCUPÉRATION DES ZONES DEPUIS SUPABASE
@@ -158,15 +157,6 @@ const updateMarkers = useCallback(() => {
 
     markersRef.current[drone.id] = marker
   })
-
-  // Forcer l'affichage de tous les drones
-  if (drones.length > 1) {
-    const bounds = L.latLngBounds(drones.map(d => [d.lat, d.lng]))
-    map.fitBounds(bounds, {
-      padding: [80, 80],
-      maxZoom: 12
-    })
-  }
 
   console.log('📌 Marqueurs actifs:', Object.keys(markersRef.current))
 }, [drones, onSelectDrone, mapReady, isFollowing])

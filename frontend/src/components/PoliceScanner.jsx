@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { supabase } from '../lib/supabase'
+import { supabaseAdmin } from '../lib/supabase'
 import { 
   Shield, 
   CheckCircle, 
@@ -52,104 +52,128 @@ const PoliceScanner = () => {
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a))
     return R * c
   }
+const verifyDrone = async (registrationNumber) => {
+  setLoading(true)
+  setError(null)
+  setScanResult(null)
+  
+  try {
+    console.log('🔍 Vérification du drone:', registrationNumber)
+    
+    // Normaliser le paramètre scanné
+    const normalizedId = registrationNumber
+      .trim()
+      .toUpperCase()
+      .replace(/\s+/g, '')
 
-  const verifyDrone = async (registrationNumber) => {
-    setLoading(true)
-    setError(null)
-    setScanResult(null)
-    try {
-      const { data: droneData, error: droneError } = await supabase
-        .from('registered_drones')
-        .select('*')
-        .eq('registration_number', registrationNumber)
-        .single()
+    // Lookup direct sur l'immatriculation normalisée
+    const { data: droneData, error: droneError } = await supabaseAdmin
+      .from('registered_drones')
+      .select('*')
+      .eq('registration_number', normalizedId)
+      .maybeSingle()
 
-      if (droneError || !droneData) {
-        setScanResult('not_found')
-        setLoading(false)
-        return
-      }
+    console.log('📊 Résultat lookup:', { data: droneData, error: droneError })
 
-      setDroneInfo(droneData)
+    if (droneError) {
+      console.error('❌ Erreur Supabase:', droneError)
+      throw new Error('Erreur de base de données: ' + droneError.message)
+    }
 
-      if (droneData.status !== 'approved' && droneData.status !== 'active') {
-        setScanResult('unauthorized')
-        setLoading(false)
-        return
-      }
+    if (!droneData) {
+      console.log('❌ Drone non trouvé:', normalizedId)
+      setScanResult('not_found')
+      setLoading(false)
+      return
+    }
 
-      const { data: telemetryData, error: telemetryError } = await supabase
-        .from('telemetry')
-        .select('*')
-        .eq('drone_id', droneData.registration_number)
-        .order('recorded_at', { ascending: false })
-        .limit(1)
+    console.log('✅ Drone trouvé:', droneData)
+    setDroneInfo(droneData)
 
-      if (!telemetryError && telemetryData && telemetryData.length > 0) {
-        setTelemetry(telemetryData[0])
-      }
+    // 2. Vérifier si le drone est autorisé
+    if (droneData.status !== 'approved' && droneData.status !== 'active') {
+      setScanResult('unauthorized')
+      setLoading(false)
+      return
+    }
 
-      const now = new Date().toISOString()
-      const { data: flightData, error: flightError } = await supabase
-        .from('flight_plans')
-        .select('*')
-        .eq('drone_id', droneData.id)
-        .eq('status', 'approved')
-        .lte('start_time', now)
-        .gte('end_time', now)
-        .limit(1)
+    // 3. Récupérer la dernière position du drone depuis telemetry
+    const { data: telemetryData, error: telemetryError } = await supabaseAdmin
+      .from('telemetry')
+      .select('*')
+      .eq('drone_id', droneData.registration_number)
+      .order('recorded_at', { ascending: false })
+      .limit(1)
 
-      if (!flightError && flightData && flightData.length > 0) {
-        setFlightPlan(flightData[0])
-      }
+    if (!telemetryError && telemetryData && telemetryData.length > 0) {
+      setTelemetry(telemetryData[0])
+    } else {
+      console.log('ℹ️ Aucune télémétrie disponible')
+    }
 
-      let isInRestrictedZone = false
-      let restrictedZoneName = null
+    // 4. Vérifier les plans de vol actifs
+    const now = new Date().toISOString()
+    const { data: flightData, error: flightError } = await supabaseAdmin
+      .from('flight_plans')
+      .select('*')
+      .eq('drone_id', droneData.id)
+      .eq('status', 'approved')
+      .lte('start_time', now)
+      .gte('end_time', now)
+      .limit(1)
 
-      if (telemetryData && telemetryData.length > 0) {
-        const tele = telemetryData[0]
-        for (const zone of GEOFENCE_ZONES) {
-          if (!zone.danger) continue
-          const distance = calculateDistance(tele.lat, tele.lng, zone.lat, zone.lng)
-          if (distance <= zone.radius) {
-            isInRestrictedZone = true
-            restrictedZoneName = zone.name
-            break
-          }
+    if (!flightError && flightData && flightData.length > 0) {
+      setFlightPlan(flightData[0])
+    }
+
+    // 5. Vérifier si le drone est dans une zone interdite
+    let isInRestrictedZone = false
+    let restrictedZoneName = null
+
+    if (telemetryData && telemetryData.length > 0) {
+      const tele = telemetryData[0]
+      for (const zone of GEOFENCE_ZONES) {
+        if (!zone.danger) continue
+        const distance = calculateDistance(tele.lat, tele.lng, zone.lat, zone.lng)
+        if (distance <= zone.radius) {
+          isInRestrictedZone = true
+          restrictedZoneName = zone.name
+          break
         }
       }
-
-      if (isInRestrictedZone) {
-        setScanResult('zone_violation')
-        await supabase.from('police_scans').insert({
-          drone_id: droneData.id,
-          officer_id: null,
-          scan_result: 'zone_violation',
-          lat: telemetryData?.[0]?.lat || null,
-          lng: telemetryData?.[0]?.lng || null
-        })
-      } else if (!flightPlan) {
-        setScanResult('no_flight_plan')
-      } else {
-        setScanResult('authorized')
-        await supabase.from('police_scans').insert({
-          drone_id: droneData.id,
-          officer_id: null,
-          scan_result: 'authorized',
-          lat: telemetryData?.[0]?.lat || null,
-          lng: telemetryData?.[0]?.lng || null
-        })
-      }
-
-    } catch (err) {
-      console.error('Erreur:', err)
-      setError(err.message)
-      setScanResult('unauthorized')
-    } finally {
-      setLoading(false)
     }
-  }
 
+    // 6. Déterminer le résultat final
+    if (isInRestrictedZone) {
+      setScanResult('zone_violation')
+      await supabaseAdmin.from('police_scans').insert({
+        drone_id: droneData.id,
+        officer_id: null,
+        scan_result: 'zone_violation',
+        lat: telemetryData?.[0]?.lat || null,
+        lng: telemetryData?.[0]?.lng || null
+      })
+    } else if (!flightPlan) {
+      setScanResult('no_flight_plan')
+    } else {
+      setScanResult('authorized')
+      await supabaseAdmin.from('police_scans').insert({
+        drone_id: droneData.id,
+        officer_id: null,
+        scan_result: 'authorized',
+        lat: telemetryData?.[0]?.lat || null,
+        lng: telemetryData?.[0]?.lng || null
+      })
+    }
+
+  } catch (err) {
+    console.error('❌ Erreur:', err)
+    setError(err.message)
+    setScanResult('unauthorized')
+  } finally {
+    setLoading(false)
+  }
+}
   const renderResult = () => {
     if (loading) {
       return (
